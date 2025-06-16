@@ -1,4 +1,4 @@
-# Fractal Generator
+# fractalrust
 
 A high-performance, terminal-based fractal generator written in Rust using the ratatui TUI framework. Generate and explore beautiful fractals including Mandelbrot sets, Julia sets, Burning Ship, Tricorn, and Multibrot fractals directly in your terminal.
 
