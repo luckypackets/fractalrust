@@ -25,6 +25,8 @@ pub struct FractalParams {
 pub struct FractalGenerator {
     pub use_adaptive_sampling: bool,
     pub performance_mode: bool,
+    pub quality_mode: bool,
+    pub super_sampling: bool,
 }
 
 impl FractalGenerator {
@@ -32,6 +34,8 @@ impl FractalGenerator {
         Self {
             use_adaptive_sampling: true,
             performance_mode: false,
+            quality_mode: true,
+            super_sampling: false,
         }
     }
 
@@ -41,6 +45,14 @@ impl FractalGenerator {
 
     pub fn set_adaptive_sampling(&mut self, enabled: bool) {
         self.use_adaptive_sampling = enabled;
+    }
+
+    pub fn set_quality_mode(&mut self, enabled: bool) {
+        self.quality_mode = enabled;
+    }
+
+    pub fn set_super_sampling(&mut self, enabled: bool) {
+        self.super_sampling = enabled;
     }
 
     pub fn generate(&self, params: &FractalParams) -> Vec<Vec<u32>> {

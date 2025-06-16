@@ -17,6 +17,8 @@ pub struct DisplayConfig {
     pub default_width: usize,
     pub default_height: usize,
     pub color_scheme: String,
+    pub quality_mode: bool,
+    pub super_sampling: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,12 +58,14 @@ impl Default for Config {
                 default_width: 80,
                 default_height: 40,
                 color_scheme: "default".to_string(),
+                quality_mode: true,
+                super_sampling: false,
             },
             fractal: FractalConfig {
                 default_zoom: 1.0,
                 default_center_x: -0.5,
                 default_center_y: 0.0,
-                default_max_iterations: 100,
+                default_max_iterations: 256,
                 auto_generation_interval_ms: 2000,
                 zoom_step: 1.5,
                 pan_step: 0.1,
