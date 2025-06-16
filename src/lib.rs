@@ -193,7 +193,7 @@ mod tests {
         assert_eq!(config.display.default_width, 80);
         assert_eq!(config.display.default_height, 40);
         assert_eq!(config.fractal.default_zoom, 1.0);
-        assert_eq!(config.fractal.default_max_iterations, 100);
+        assert_eq!(config.fractal.default_max_iterations, 256);
     }
 
     #[test]
@@ -213,6 +213,6 @@ mod tests {
         assert_eq!(app.zoom_factor, 1.0);
         assert_eq!(app.center_x, -0.5);
         assert_eq!(app.center_y, 0.0);
-        assert_eq!(app.max_iterations, 100);
+        assert_eq!(app.max_iterations, 256);
     }
 }

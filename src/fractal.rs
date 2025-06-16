@@ -56,6 +56,14 @@ impl FractalGenerator {
     }
 
     pub fn generate(&self, params: &FractalParams) -> Vec<Vec<u32>> {
+        if self.super_sampling {
+            self.generate_with_super_sampling(params)
+        } else {
+            self.generate_standard(params)
+        }
+    }
+
+    fn generate_standard(&self, params: &FractalParams) -> Vec<Vec<u32>> {
         match &params.fractal_type {
             FractalType::Mandelbrot => self.generate_mandelbrot(params),
             FractalType::Julia { c } => self.generate_julia(params, *c),
@@ -70,6 +78,49 @@ impl FractalGenerator {
         }
     }
 
+    fn generate_with_super_sampling(&self, params: &FractalParams) -> Vec<Vec<u32>> {
+        // Generate at 2x resolution then downsample for better quality
+        let super_params = FractalParams {
+            width: params.width * 2,
+            height: params.height * 2,
+            ..params.clone()
+        };
+
+        let super_data = self.generate_standard(&super_params);
+        self.downsample_fractal(super_data, params.width, params.height)
+    }
+
+    fn downsample_fractal(&self, data: Vec<Vec<u32>>, target_width: usize, target_height: usize) -> Vec<Vec<u32>> {
+        let mut result = vec![vec![0u32; target_width]; target_height];
+
+        for y in 0..target_height {
+            for x in 0..target_width {
+                // Sample 2x2 area and take average
+                let src_x = x * 2;
+                let src_y = y * 2;
+
+                let mut sum = 0u32;
+                let mut count = 0u32;
+
+                for dy in 0..2 {
+                    for dx in 0..2 {
+                        let sample_x = src_x + dx;
+                        let sample_y = src_y + dy;
+
+                        if sample_y < data.len() && sample_x < data[sample_y].len() {
+                            sum += data[sample_y][sample_x];
+                            count += 1;
+                        }
+                    }
+                }
+
+                result[y][x] = if count > 0 { sum / count } else { 0 };
+            }
+        }
+
+        result
+    }
+
     fn generate_mandelbrot(&self, params: &FractalParams) -> Vec<Vec<u32>> {
         let width = params.width;
         let height = params.height;
@@ -78,6 +129,9 @@ impl FractalGenerator {
         let center_y = params.center_y;
         let max_iterations = if self.performance_mode {
             (params.max_iterations / 2).max(20)
+        } else if self.quality_mode {
+            // In quality mode, use higher iterations for better detail
+            (params.max_iterations * 3 / 2).min(512)
         } else {
             params.max_iterations
         };

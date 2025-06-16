@@ -198,7 +198,7 @@ fn test_app_initialization() {
     assert_eq!(app.zoom_factor, 1.0);
     assert_eq!(app.center_x, -0.5);
     assert_eq!(app.center_y, 0.0);
-    assert_eq!(app.max_iterations, 100);
+    assert_eq!(app.max_iterations, 256);
     assert!(app.fractal_cache.is_empty());
     assert_eq!(app.frame_count, 0);
     assert_eq!(app.fps, 0.0);

@@ -84,7 +84,7 @@ impl App {
             zoom_factor: 1.0,
             center_x: -0.5,
             center_y: 0.0,
-            max_iterations: 100,
+            max_iterations: 256,
             current_equation: "z^2 + c".to_string(),
             current_fractal_type: FractalType::Mandelbrot,
             status_message: "Ready".to_string(),
@@ -252,6 +252,26 @@ impl App {
                     "Performance: {} generations, avg {:.1}ms, FPS: {:.1}, Cache: {} entries",
                     self.generation_count, avg_time, self.fps, self.fractal_cache.len()
                 );
+            },
+            KeyCode::F(9) => {
+                let quality_mode = !self.fractal_generator.quality_mode;
+                self.fractal_generator.set_quality_mode(quality_mode);
+                self.renderer.set_quality_mode(quality_mode);
+                self.fractal_cache.clear(); // Clear cache since quality changed
+                self.status_message = format!("Quality Mode: {} - {}",
+                    if quality_mode { "ON" } else { "OFF" },
+                    if quality_mode { "Higher detail, more iterations" } else { "Standard detail" });
+                self.regenerate_fractal();
+            },
+            KeyCode::F(10) => {
+                let super_sampling = !self.fractal_generator.super_sampling;
+                self.fractal_generator.set_super_sampling(super_sampling);
+                self.renderer.set_super_sampling(super_sampling);
+                self.fractal_cache.clear(); // Clear cache since sampling changed
+                self.status_message = format!("Super Sampling: {} - {}",
+                    if super_sampling { "ON" } else { "OFF" },
+                    if super_sampling { "2x resolution (slower)" } else { "1x resolution (faster)" });
+                self.regenerate_fractal();
             },
             _ => {}
         }
@@ -557,8 +577,8 @@ impl App {
         let main_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(70), // Fractal display
-                Constraint::Percentage(30), // Controls
+                Constraint::Percentage(80), // Fractal display
+                Constraint::Percentage(20), // Controls
             ])
             .split(area);
 
@@ -634,14 +654,16 @@ impl App {
             )
         } else {
             format!(
-                "Mode: {}{}\n\nParameters:\nZoom: {:.2}x\nCenter: ({:.3}, {:.3})\nIterations: {}\n\nEquation: {}\n\nControls:\n+/= : Zoom In\n-   : Zoom Out\n↑↓←→: Pan\ni   : More Iterations\nd   : Fewer Iterations\nr/Space: Regenerate\nc   : Reset Center\n1   : Interactive Mode\n2   : Auto Mode\n3   : Edit Equation\nh/F1: Toggle Help\nq/Esc: Quit",
+                "Mode: {}{}\n\nParameters:\nZoom: {:.2}x\nCenter: ({:.3}, {:.3})\nIterations: {}\n\nEquation: {}\n\nQuality:\nQuality Mode: {}\nSuper Sampling: {}\n\nControls:\n+/= : Zoom In\n-   : Zoom Out\n↑↓←→: Pan\ni   : More Iterations\nd   : Fewer Iterations\nr/Space: Regenerate\nc   : Reset Center\n1   : Interactive Mode\n2   : Auto Mode\n3   : Edit Equation\nF9  : Quality Mode\nF10 : Super Sampling\nh/F1: Toggle Help\nq/Esc: Quit",
                 mode_str,
                 input_indicator,
                 self.zoom_factor,
                 self.center_x,
                 self.center_y,
                 self.max_iterations,
-                self.current_equation
+                self.current_equation,
+                if self.fractal_generator.quality_mode { "ON" } else { "OFF" },
+                if self.fractal_generator.super_sampling { "ON" } else { "OFF" }
             )
         };
 
@@ -693,11 +715,13 @@ impl App {
             F2 - Burning Ship\n\
             F3 - Julia Set\n\
             F4 - Tricorn\n\n\
-            Performance:\n\
+            Performance & Quality:\n\
             F5 - Toggle Performance Mode\n\
             F6 - Toggle Adaptive Sampling\n\
             F7 - Clear Cache\n\
-            F8 - Show Performance Stats\n\n\
+            F8 - Show Performance Stats\n\
+            F9 - Toggle Quality Mode\n\
+            F10 - Toggle Super Sampling\n\n\
             Equation Editor:\n\
             Examples: z^3+c, burning ship,\n\
             tricorn, julia(-0.7, 0.27)\n\n\

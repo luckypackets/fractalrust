@@ -18,6 +18,7 @@ A high-performance, terminal-based fractal generator written in Rust using the r
 - **Responsive UI** that adapts to terminal size
 - **Dynamic resize handling** - Fractal automatically adjusts when terminal is resized
 - **Smart centering** - Fractal stays centered with padding when terminal is larger than needed
+- **Optimized layout** - 80% screen space dedicated to fractal display for maximum detail
 
 ### ⚡ High Performance
 - **Multi-threaded computation** using Rayon for parallel processing
@@ -76,11 +77,13 @@ cargo run --release
 - **F3** - Julia Set fractal
 - **F4** - Tricorn fractal
 
-#### Performance
+#### Performance & Quality
 - **F5** - Toggle Performance Mode (faster rendering)
 - **F6** - Toggle Adaptive Sampling
 - **F7** - Clear fractal cache
 - **F8** - Show performance statistics
+- **F9** - Toggle Quality Mode (higher detail)
+- **F10** - Toggle Super Sampling (2x resolution)
 
 #### General
 - **h/F1** - Toggle help display
@@ -162,10 +165,18 @@ The application supports configuration through a JSON file:
 - Clear cache (F7) if memory usage becomes high
 
 ### For Better Quality
+- **Enable Quality Mode** (F9) for enhanced detail and higher iterations
+- **Enable Super Sampling** (F10) for 2x resolution rendering
 - Increase iterations with 'i' key for more detail
 - Disable Performance Mode for full-quality rendering
 - Use higher zoom levels to see fine fractal details
 - Try different fractal types to see various mathematical structures
+
+### Quality Features
+- **Quality Mode** - Uses enhanced character mapping with 18+ gradation levels and higher iteration counts
+- **Super Sampling** - Renders at 2x resolution then downsamples for smoother edges
+- **Enhanced Color Palette** - More detailed color gradations for better visual distinction
+- **Higher Default Iterations** - Increased from 100 to 256 for more detail by default
 
 ## Architecture
 
