@@ -52,6 +52,8 @@ pub struct App {
     pub fps: f64,
     pub total_generation_time: Duration,
     pub generation_count: u32,
+    pub fractal_display_area: Option<Rect>,
+    pub last_terminal_size: Option<(u16, u16)>,
 }
 
 impl Default for App {
