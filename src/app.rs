@@ -50,6 +50,8 @@ pub struct App {
     pub last_render_time: Instant,
     pub frame_count: u32,
     pub fps: f64,
+    pub total_generation_time: Duration,
+    pub generation_count: u32,
 }
 
 impl Default for App {
@@ -89,6 +91,8 @@ impl App {
             last_render_time: Instant::now(),
             frame_count: 0,
             fps: 0.0,
+            total_generation_time: Duration::new(0, 0),
+            generation_count: 0,
         }
     }
 
@@ -141,7 +145,7 @@ impl App {
                 self.input_mode = InputMode::Editing;
                 self.status_message = "Equation Editor - Type new equation, Enter to apply, Esc to cancel".to_string();
             },
-            KeyCode::Char('r') | KeyCode::F(5) => {
+            KeyCode::Char('r') => {
                 self.regenerate_fractal();
                 self.status_message = "Fractal regenerated".to_string();
             },
@@ -186,6 +190,40 @@ impl App {
                 self.current_equation = "Tricorn".to_string();
                 self.status_message = "Switched to Tricorn fractal".to_string();
                 self.regenerate_fractal();
+            },
+            KeyCode::F(5) => {
+                // Toggle performance mode
+                self.fractal_generator.performance_mode = !self.fractal_generator.performance_mode;
+                let mode_str = if self.fractal_generator.performance_mode { "ON" } else { "OFF" };
+                self.status_message = format!("Performance mode: {}", mode_str);
+                self.fractal_cache.clear(); // Clear cache when changing performance mode
+                self.regenerate_fractal();
+            },
+            KeyCode::F(6) => {
+                // Toggle adaptive sampling
+                self.fractal_generator.use_adaptive_sampling = !self.fractal_generator.use_adaptive_sampling;
+                let mode_str = if self.fractal_generator.use_adaptive_sampling { "ON" } else { "OFF" };
+                self.status_message = format!("Adaptive sampling: {}", mode_str);
+                self.fractal_cache.clear(); // Clear cache when changing sampling mode
+                self.regenerate_fractal();
+            },
+            KeyCode::F(7) => {
+                // Clear cache manually
+                let cache_size = self.fractal_cache.len();
+                self.fractal_cache.clear();
+                self.status_message = format!("Cleared {} cached fractals", cache_size);
+            },
+            KeyCode::F(8) => {
+                // Show performance statistics
+                let avg_time = if self.generation_count > 0 {
+                    self.total_generation_time.as_millis() / self.generation_count as u128
+                } else {
+                    0
+                };
+                self.status_message = format!(
+                    "Performance: {} generations, avg {:.1}ms, FPS: {:.1}, Cache: {} entries",
+                    self.generation_count, avg_time, self.fps, self.fractal_cache.len()
+                );
             },
             _ => {}
         }
@@ -274,8 +312,12 @@ impl App {
             }
 
             let generation_time = start_time.elapsed();
-            self.status_message = format!("Generated fractal - Zoom: {:.2}, Iterations: {}, Time: {:.1}ms",
-                self.zoom_factor, self.max_iterations, generation_time.as_millis());
+            self.total_generation_time += generation_time;
+            self.generation_count += 1;
+
+            let avg_time = self.total_generation_time.as_millis() / self.generation_count as u128;
+            self.status_message = format!("Generated fractal - Zoom: {:.2}, Iterations: {}, Time: {:.1}ms (Avg: {:.1}ms)",
+                self.zoom_factor, self.max_iterations, generation_time.as_millis(), avg_time);
         }
 
         // Update FPS counter
@@ -533,7 +575,14 @@ impl App {
     }
 
     fn render_footer(&self, f: &mut Frame, area: Rect) {
-        let footer = Paragraph::new(self.status_message.as_str())
+        let footer_text = if self.fps > 0.0 {
+            format!("{} | FPS: {:.1} | Cache: {} entries",
+                self.status_message, self.fps, self.fractal_cache.len())
+        } else {
+            self.status_message.clone()
+        };
+
+        let footer = Paragraph::new(footer_text)
             .style(Style::default().fg(Color::Yellow))
             .block(Block::default().borders(Borders::ALL));
         f.render_widget(footer, area);
@@ -568,6 +617,11 @@ impl App {
             F2 - Burning Ship\n\
             F3 - Julia Set\n\
             F4 - Tricorn\n\n\
+            Performance:\n\
+            F5 - Toggle Performance Mode\n\
+            F6 - Toggle Adaptive Sampling\n\
+            F7 - Clear Cache\n\
+            F8 - Show Performance Stats\n\n\
             Equation Editor:\n\
             Examples: z^3+c, burning ship,\n\
             tricorn, julia(-0.7, 0.27)\n\n\

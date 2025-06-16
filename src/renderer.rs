@@ -7,6 +7,8 @@ pub struct TerminalRenderer {
     // Configuration for rendering
     pub use_colors: bool,
     pub use_unicode: bool,
+    pub use_fast_rendering: bool,
+    pub last_rendered_data: Option<Vec<Vec<u32>>>,
 }
 
 impl TerminalRenderer {
@@ -14,10 +16,16 @@ impl TerminalRenderer {
         Self {
             use_colors: true,
             use_unicode: true,
+            use_fast_rendering: false,
+            last_rendered_data: None,
         }
     }
 
-    pub fn render_to_text(&self, fractal_data: &[Vec<u32>], target_width: usize, target_height: usize) -> Vec<Line> {
+    pub fn set_fast_rendering(&mut self, enabled: bool) {
+        self.use_fast_rendering = enabled;
+    }
+
+    pub fn render_to_text(&mut self, fractal_data: &[Vec<u32>], target_width: usize, target_height: usize) -> Vec<Line> {
         if fractal_data.is_empty() {
             return vec![Line::from("No fractal data")];
         }
@@ -25,26 +33,49 @@ impl TerminalRenderer {
         let data_height = fractal_data.len();
         let data_width = fractal_data[0].len();
 
+        // Check if we can use differential rendering
+        let use_differential = self.use_fast_rendering &&
+            self.last_rendered_data.as_ref()
+                .map(|last| last.len() == data_height && last[0].len() == data_width)
+                .unwrap_or(false);
+
         // Scale the fractal data to fit the target dimensions
         let mut lines = Vec::new();
-        
+
         for y in 0..target_height.min(data_height) {
             let mut spans = Vec::new();
-            
+
             for x in 0..target_width.min(data_width) {
                 let iterations = fractal_data[y][x];
+
+                // Skip rendering if pixel hasn't changed (differential rendering)
+                if use_differential {
+                    if let Some(ref last_data) = self.last_rendered_data {
+                        if last_data[y][x] == iterations {
+                            // Use cached character for unchanged pixels
+                            spans.push(Span::raw(" "));
+                            continue;
+                        }
+                    }
+                }
+
                 let (character, color) = self.iterations_to_char_and_color(iterations);
-                
+
                 let span = if self.use_colors {
                     Span::styled(character.to_string(), Style::default().fg(color))
                 } else {
                     Span::raw(character.to_string())
                 };
-                
+
                 spans.push(span);
             }
-            
+
             lines.push(Line::from(spans));
+        }
+
+        // Cache the current data for next differential render
+        if self.use_fast_rendering {
+            self.last_rendered_data = Some(fractal_data.to_vec());
         }
 
         lines

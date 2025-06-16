@@ -104,34 +104,37 @@ impl FractalGenerator {
         let x_scale = (x_max - x_min) / width as f64;
         let y_scale = (y_max - y_min) / height as f64;
 
-        // First pass: sample every 2nd pixel
-        let mut result = vec![vec![0u32; width]; height];
+        // Generate with reduced resolution for performance
+        let sample_step = 2;
+        let sample_width = (width + sample_step - 1) / sample_step;
+        let sample_height = (height + sample_step - 1) / sample_step;
 
-        (0..height)
+        // Generate sampled data
+        let sampled_data: Vec<Vec<u32>> = (0..sample_height)
             .into_par_iter()
-            .step_by(2)
-            .for_each(|y| {
-                for x in (0..width).step_by(2) {
-                    let real = x_min + x as f64 * x_scale;
-                    let imag = y_min + y as f64 * y_scale;
-                    let c = Complex::new(real, imag);
-                    let iterations = self.mandelbrot_iterations(c, max_iterations);
+            .map(|sy| {
+                (0..sample_width)
+                    .map(|sx| {
+                        let x = sx * sample_step;
+                        let y = sy * sample_step;
+                        let real = x_min + x as f64 * x_scale;
+                        let imag = y_min + y as f64 * y_scale;
+                        let c = Complex::new(real, imag);
+                        self.mandelbrot_iterations(c, max_iterations)
+                    })
+                    .collect()
+            })
+            .collect();
 
-                    // Fill 2x2 block with the same value for performance
-                    if y < height {
-                        result[y][x] = iterations;
-                        if x + 1 < width {
-                            result[y][x + 1] = iterations;
-                        }
-                    }
-                    if y + 1 < height {
-                        result[y + 1][x] = iterations;
-                        if x + 1 < width {
-                            result[y + 1][x + 1] = iterations;
-                        }
-                    }
-                }
-            });
+        // Upscale the sampled data to full resolution
+        let mut result = vec![vec![0u32; width]; height];
+        for y in 0..height {
+            for x in 0..width {
+                let sx = (x / sample_step).min(sample_width - 1);
+                let sy = (y / sample_step).min(sample_height - 1);
+                result[y][x] = sampled_data[sy][sx];
+            }
+        }
 
         result
     }
