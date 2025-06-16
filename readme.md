@@ -39,7 +39,7 @@ A high-performance, terminal-based fractal generator written in Rust using the r
 
 ### Building from Source
 ```bash
-git clone https://github.com/yourusername/fractalrust.git
+git clone https://github.com/luckypackets/fractalrust.git
 cd fractalrust
 cargo build --release
 ```
