@@ -1,0 +1,1 @@
+/Users/shaan/fractalrust/target/release/fractal-generator: /Users/shaan/fractalrust/src/app.rs /Users/shaan/fractalrust/src/config.rs /Users/shaan/fractalrust/src/fractal.rs /Users/shaan/fractalrust/src/lib.rs /Users/shaan/fractalrust/src/main.rs /Users/shaan/fractalrust/src/renderer.rs /Users/shaan/fractalrust/src/ui.rs

@@ -81,6 +81,67 @@ impl TerminalRenderer {
         lines
     }
 
+    pub fn render_to_text_with_bounds(
+        &mut self,
+        fractal_data: &[Vec<u32>],
+        start_x: usize,
+        start_y: usize,
+        display_width: usize,
+        display_height: usize,
+        target_width: usize,
+        target_height: usize
+    ) -> Vec<Line> {
+        if fractal_data.is_empty() {
+            return vec![Line::from("No fractal data")];
+        }
+
+        let data_height = fractal_data.len();
+        let data_width = if data_height > 0 { fractal_data[0].len() } else { 0 };
+
+        let mut lines = Vec::new();
+
+        // Calculate centering offsets if the fractal is smaller than the target area
+        let center_offset_x = if display_width < target_width { (target_width - display_width) / 2 } else { 0 };
+        let center_offset_y = if display_height < target_height { (target_height - display_height) / 2 } else { 0 };
+
+        for target_y in 0..target_height {
+            let mut spans = Vec::new();
+
+            for target_x in 0..target_width {
+                let char_and_color = if target_y >= center_offset_y &&
+                                       target_y < center_offset_y + display_height &&
+                                       target_x >= center_offset_x &&
+                                       target_x < center_offset_x + display_width {
+                    // We're in the fractal display area
+                    let fractal_x = start_x + (target_x - center_offset_x);
+                    let fractal_y = start_y + (target_y - center_offset_y);
+
+                    if fractal_y < data_height && fractal_x < data_width {
+                        let iterations = fractal_data[fractal_y][fractal_x];
+                        self.iterations_to_char_and_color(iterations)
+                    } else {
+                        (' ', Color::Black) // Outside fractal bounds
+                    }
+                } else {
+                    // We're in the padding area
+                    (' ', Color::Black)
+                };
+
+                let span = if self.use_colors {
+                    Span::styled(char_and_color.0.to_string(), Style::default().fg(char_and_color.1))
+                } else {
+                    Span::raw(char_and_color.0.to_string())
+                };
+
+                spans.push(span);
+            }
+
+            lines.push(Line::from(spans));
+        }
+
+        lines
+    }
+
     fn iterations_to_char_and_color(&self, iterations: u32) -> (char, Color) {
         if self.use_unicode {
             self.iterations_to_unicode_char_and_color(iterations)

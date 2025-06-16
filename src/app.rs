@@ -95,6 +95,8 @@ impl App {
             fps: 0.0,
             total_generation_time: Duration::new(0, 0),
             generation_count: 0,
+            fractal_display_area: None,
+            last_terminal_size: None,
         }
     }
 
@@ -114,8 +116,14 @@ impl App {
 
     fn handle_events(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if event::poll(Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                self.handle_key_event(key);
+            match event::read()? {
+                Event::Key(key) => {
+                    self.handle_key_event(key);
+                }
+                Event::Resize(width, height) => {
+                    self.handle_resize_event(width, height);
+                }
+                _ => {}
             }
         }
         Ok(())
@@ -125,6 +133,24 @@ impl App {
         match self.input_mode {
             InputMode::Normal => self.handle_normal_key_event(key),
             InputMode::Editing => self.handle_editing_key_event(key),
+        }
+    }
+
+    pub fn handle_resize_event(&mut self, width: u16, height: u16) {
+        let new_size = (width, height);
+
+        // Only regenerate if the size actually changed
+        if self.last_terminal_size != Some(new_size) {
+            self.last_terminal_size = Some(new_size);
+
+            // Clear the fractal display area so it gets recalculated
+            self.fractal_display_area = None;
+
+            // Clear cache since the fractal dimensions will change
+            self.fractal_cache.clear();
+
+            // The fractal will be regenerated on the next render when the new display area is calculated
+            self.status_message = format!("Terminal resized to {}x{} - Regenerating fractal", width, height);
         }
     }
 
@@ -279,13 +305,30 @@ impl App {
         Ok(())
     }
 
-    fn regenerate_fractal(&mut self) {
+    pub fn regenerate_fractal(&mut self) {
+        self.regenerate_fractal_with_size(None);
+    }
+
+    fn regenerate_fractal_with_size(&mut self, size_override: Option<(usize, usize)>) {
         let start_time = Instant::now();
+
+        // Use the fractal display area if available, otherwise fall back to defaults
+        let (width, height) = if let Some((w, h)) = size_override {
+            (w, h)
+        } else if let Some(area) = self.fractal_display_area {
+            // Account for borders (subtract 2 for left/right borders, 2 for top/bottom borders)
+            let display_width = (area.width.saturating_sub(2) as usize).max(20);
+            let display_height = (area.height.saturating_sub(2) as usize).max(10);
+            (display_width, display_height)
+        } else {
+            // Default fallback
+            (80, 24)
+        };
 
         let params = FractalParams {
             fractal_type: self.current_fractal_type.clone(),
-            width: 80,
-            height: 24, // Reduced height to fit better in terminal
+            width,
+            height,
             zoom: self.zoom_factor,
             center_x: self.center_x,
             center_y: self.center_y,
@@ -524,12 +567,43 @@ impl App {
     }
 
     fn render_fractal_display(&mut self, f: &mut Frame, area: Rect) {
-        if self.fractal_data.is_empty() {
+        // Store the display area for fractal generation
+        let area_changed = self.fractal_display_area.map_or(true, |old_area| {
+            old_area.width != area.width || old_area.height != area.height
+        });
+
+        if area_changed {
+            self.fractal_display_area = Some(area);
+        }
+
+        // Regenerate fractal if empty or if the display area changed
+        if self.fractal_data.is_empty() || area_changed {
             self.regenerate_fractal();
         }
 
-        let fractal_text = self.renderer.render_to_text(&self.fractal_data, area.width as usize, area.height as usize);
-        
+        // Calculate the actual content area (inside the border)
+        let content_width = area.width.saturating_sub(2) as usize;
+        let content_height = area.height.saturating_sub(2) as usize;
+
+        // Get the fractal dimensions
+        let fractal_height = self.fractal_data.len();
+        let fractal_width = if fractal_height > 0 { self.fractal_data[0].len() } else { 0 };
+
+        // Calculate how much of the fractal to display and centering
+        let display_width = content_width.min(fractal_width);
+        let display_height = content_height.min(fractal_height);
+
+        // Center the fractal if the display area is larger
+        let start_x = if fractal_width < content_width { 0 } else { (fractal_width - content_width) / 2 };
+        let start_y = if fractal_height < content_height { 0 } else { (fractal_height - content_height) / 2 };
+
+        let fractal_text = self.renderer.render_to_text_with_bounds(
+            &self.fractal_data,
+            start_x, start_y,
+            display_width, display_height,
+            content_width, content_height
+        );
+
         let fractal_widget = Paragraph::new(fractal_text)
             .block(Block::default().borders(Borders::ALL).title("Fractal"));
         f.render_widget(fractal_widget, area);

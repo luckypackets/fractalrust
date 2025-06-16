@@ -238,3 +238,67 @@ fn test_zoom_and_pan_bounds() {
     assert_eq!(result2.len(), 5);
     assert_eq!(result2[0].len(), 5);
 }
+
+#[test]
+fn test_app_resize_handling() {
+    use ratatui::layout::Rect;
+
+    let mut app = App::new();
+
+    // Test initial state
+    assert_eq!(app.fractal_display_area, None);
+    assert_eq!(app.last_terminal_size, None);
+
+    // Simulate a resize event
+    app.handle_resize_event(120, 40);
+
+    // Check that the resize was recorded
+    assert_eq!(app.last_terminal_size, Some((120, 40)));
+
+    // Simulate setting a display area (this would normally happen during rendering)
+    let test_area = Rect::new(0, 0, 80, 30);
+    app.fractal_display_area = Some(test_area);
+
+    // Generate a fractal with the current settings
+    app.regenerate_fractal();
+
+    // Verify that fractal data was generated
+    assert!(!app.fractal_data.is_empty());
+
+    // The fractal should be sized to fit the display area (minus borders)
+    let expected_height = (test_area.height.saturating_sub(2) as usize).max(10);
+    let expected_width = (test_area.width.saturating_sub(2) as usize).max(20);
+
+    assert_eq!(app.fractal_data.len(), expected_height);
+    if !app.fractal_data.is_empty() {
+        assert_eq!(app.fractal_data[0].len(), expected_width);
+    }
+}
+
+#[test]
+fn test_renderer_with_bounds() {
+    let mut renderer = TerminalRenderer::new();
+
+    // Create a small test fractal
+    let fractal_data = vec![
+        vec![0, 10, 20, 30],
+        vec![40, 50, 60, 70],
+        vec![80, 90, 100, 110],
+    ];
+
+    // Test rendering with bounds and centering
+    let lines = renderer.render_to_text_with_bounds(
+        &fractal_data,
+        0, 0,  // start_x, start_y
+        4, 3,  // display_width, display_height
+        6, 5   // target_width, target_height (larger to test centering)
+    );
+
+    // Should have 5 lines (target_height)
+    assert_eq!(lines.len(), 5);
+
+    // Each line should have 6 characters (target_width)
+    for line in &lines {
+        assert_eq!(line.spans.len(), 6);
+    }
+}

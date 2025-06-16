@@ -16,6 +16,8 @@ A high-performance, terminal-based fractal generator written in Rust using the r
 - **Interactive navigation** with keyboard controls
 - **Multiple display modes** - Interactive, Auto-generation, and Equation Editor
 - **Responsive UI** that adapts to terminal size
+- **Dynamic resize handling** - Fractal automatically adjusts when terminal is resized
+- **Smart centering** - Fractal stays centered with padding when terminal is larger than needed
 
 ### ⚡ High Performance
 - **Multi-threaded computation** using Rayon for parallel processing
@@ -83,6 +85,21 @@ cargo run --release
 #### General
 - **h/F1** - Toggle help display
 - **q/Esc** - Quit application
+
+### Terminal Resize Support
+
+The fractal generator now includes intelligent terminal resize handling:
+
+- **Automatic Detection** - The application automatically detects when the terminal is resized
+- **Dynamic Regeneration** - Fractals are regenerated to match the new terminal dimensions
+- **Consistent Size** - The fractal maintains its logical size and mathematical accuracy
+- **Smart Centering** - When the terminal is larger than needed, the fractal is centered with padding
+- **Performance Optimized** - Resize events are debounced to avoid excessive regeneration
+
+**How it works:**
+- When you maximize your terminal or change its size, the fractal will automatically adjust
+- The fractal computation uses the available display area efficiently
+- No manual intervention required - just resize your terminal and continue exploring!
 
 ### Equation Editor
 
