@@ -1,0 +1,31 @@
+{
+  "display": {
+    "use_colors": true,
+    "use_unicode": true,
+    "default_width": 80,
+    "default_height": 40,
+    "color_scheme": "default"
+  },
+  "fractal": {
+    "default_zoom": 1.0,
+    "default_center_x": -0.5,
+    "default_center_y": 0.0,
+    "default_max_iterations": 100,
+    "auto_generation_interval_ms": 2000,
+    "zoom_step": 1.5,
+    "pan_step": 0.1
+  },
+  "performance": {
+    "use_parallel_processing": true,
+    "thread_count": null,
+    "enable_caching": true,
+    "max_cache_size": 100
+  },
+  "controls": {
+    "zoom_in_key": "+",
+    "zoom_out_key": "-",
+    "pan_speed": 1.0,
+    "zoom_speed": 1.0,
+    "iteration_step": 10
+  }
+}

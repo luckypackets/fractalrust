@@ -1,7 +1,65 @@
+//! # Fractal Generator
+//!
+//! A high-performance, terminal-based fractal generator written in Rust using the ratatui TUI framework.
+//! Generate and explore beautiful fractals including Mandelbrot sets, Julia sets, Burning Ship,
+//! Tricorn, and Multibrot fractals directly in your terminal.
+//!
+//! ## Features
+//!
+//! - Multiple fractal types (Mandelbrot, Julia, Burning Ship, Tricorn, Multibrot)
+//! - Real-time interactive navigation with zoom and pan
+//! - Auto-generation mode with smooth transitions
+//! - Equation editor for custom fractal parameters
+//! - High-performance multi-threaded computation
+//! - Intelligent caching system
+//! - Terminal-based UI with Unicode characters and colors
+//!
+//! ## Quick Start
+//!
+//! ```rust,no_run
+//! use fractal_generator::App;
+//! use ratatui::{backend::CrosstermBackend, Terminal};
+//! use crossterm::{
+//!     event::{DisableMouseCapture, EnableMouseCapture},
+//!     execute,
+//!     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+//! };
+//! use std::io;
+//!
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // Setup terminal
+//!     enable_raw_mode()?;
+//!     let mut stdout = io::stdout();
+//!     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+//!     let backend = CrosstermBackend::new(stdout);
+//!     let mut terminal = Terminal::new(backend)?;
+//!
+//!     // Create and run app
+//!     let mut app = App::new();
+//!     let res = app.run(&mut terminal);
+//!
+//!     // Restore terminal
+//!     disable_raw_mode()?;
+//!     execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+//!     terminal.show_cursor()?;
+//!
+//!     if let Err(err) = res {
+//!         println!("Error: {:?}", err);
+//!     }
+//!
+//!     Ok(())
+//! }
+//! ```
+
+/// Main application logic and UI coordination
 pub mod app;
+/// Fractal generation algorithms and mathematical computations
 pub mod fractal;
+/// User interface components and layout
 pub mod ui;
+/// Terminal rendering and character/color mapping
 pub mod renderer;
+/// Configuration management and serialization
 pub mod config;
 
 pub use app::App;
