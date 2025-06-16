@@ -8,7 +8,9 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::time::{Duration, Instant};
+use std::collections::HashMap;
 use rand::Rng;
+use num_complex::Complex;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
@@ -41,8 +43,13 @@ pub struct App {
     pub center_y: f64,
     pub max_iterations: u32,
     pub current_equation: String,
+    pub current_fractal_type: FractalType,
     pub status_message: String,
     pub show_help: bool,
+    pub fractal_cache: HashMap<String, Vec<Vec<u32>>>,
+    pub last_render_time: Instant,
+    pub frame_count: u32,
+    pub fps: f64,
 }
 
 impl Default for App {
@@ -75,8 +82,13 @@ impl App {
             center_y: 0.0,
             max_iterations: 100,
             current_equation: "z^2 + c".to_string(),
+            current_fractal_type: FractalType::Mandelbrot,
             status_message: "Ready".to_string(),
             show_help: false,
+            fractal_cache: HashMap::new(),
+            last_render_time: Instant::now(),
+            frame_count: 0,
+            fps: 0.0,
         }
     }
 
@@ -120,7 +132,9 @@ impl App {
             },
             KeyCode::Char('2') => {
                 self.mode = AppMode::AutoGenerate;
-                self.status_message = "Switched to Auto-Generate mode".to_string();
+                self.auto_generation_phase = 0;
+                self.auto_generation_timer = Instant::now();
+                self.status_message = "Switched to Auto-Generate mode - Exploring fractal automatically".to_string();
             },
             KeyCode::Char('3') => {
                 self.mode = AppMode::EquationEditor;
@@ -152,6 +166,27 @@ impl App {
                 self.regenerate_fractal();
                 self.status_message = "Fractal regenerated".to_string();
             },
+            KeyCode::F(2) => {
+                // Quick preset: Burning Ship
+                self.current_fractal_type = FractalType::BurningShip;
+                self.current_equation = "Burning Ship".to_string();
+                self.status_message = "Switched to Burning Ship fractal".to_string();
+                self.regenerate_fractal();
+            },
+            KeyCode::F(3) => {
+                // Quick preset: Julia Set
+                self.current_fractal_type = FractalType::Julia { c: Complex::new(-0.7269, 0.1889) };
+                self.current_equation = "Julia: c = -0.7269 + 0.1889i".to_string();
+                self.status_message = "Switched to Julia Set fractal".to_string();
+                self.regenerate_fractal();
+            },
+            KeyCode::F(4) => {
+                // Quick preset: Tricorn
+                self.current_fractal_type = FractalType::Tricorn;
+                self.current_equation = "Tricorn".to_string();
+                self.status_message = "Switched to Tricorn fractal".to_string();
+                self.regenerate_fractal();
+            },
             _ => {}
         }
     }
@@ -159,19 +194,27 @@ impl App {
     fn handle_editing_key_event(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Enter => {
-                self.input_mode = InputMode::Normal;
-                self.mode = AppMode::Interactive;
-                self.regenerate_fractal();
+                if self.validate_and_apply_equation() {
+                    self.input_mode = InputMode::Normal;
+                    self.mode = AppMode::Interactive;
+                    self.status_message = "Custom equation applied successfully".to_string();
+                    self.regenerate_fractal();
+                } else {
+                    self.status_message = "Invalid equation format. Use supported patterns like 'z^2+c', 'z^3+c', etc.".to_string();
+                }
             },
             KeyCode::Esc => {
                 self.input_mode = InputMode::Normal;
                 self.mode = AppMode::Interactive;
+                self.status_message = "Equation editing cancelled".to_string();
             },
             KeyCode::Backspace => {
                 self.current_equation.pop();
             },
             KeyCode::Char(c) => {
-                self.current_equation.push(c);
+                if self.current_equation.len() < 50 { // Limit equation length
+                    self.current_equation.push(c);
+                }
             },
             _ => {}
         }
@@ -180,20 +223,27 @@ impl App {
     fn update(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         match self.mode {
             AppMode::AutoGenerate => {
-                if self.auto_generation_timer.elapsed() > Duration::from_millis(2000) {
+                if self.auto_generation_timer.elapsed() > Duration::from_millis(100) {
                     self.auto_update_parameters();
                     self.regenerate_fractal();
                     self.auto_generation_timer = Instant::now();
                 }
             },
-            _ => {}
+            _ => {
+                // Optimize parameters based on performance in interactive mode
+                if self.last_render_time.elapsed() > Duration::from_secs(2) {
+                    self.optimize_parameters_for_performance();
+                }
+            }
         }
         Ok(())
     }
 
     fn regenerate_fractal(&mut self) {
+        let start_time = Instant::now();
+
         let params = FractalParams {
-            fractal_type: FractalType::Mandelbrot,
+            fractal_type: self.current_fractal_type.clone(),
             width: 80,
             height: 24, // Reduced height to fit better in terminal
             zoom: self.zoom_factor,
@@ -202,8 +252,34 @@ impl App {
             max_iterations: self.max_iterations,
         };
 
-        self.fractal_data = self.fractal_generator.generate(&params);
-        self.status_message = format!("Generated fractal - Zoom: {:.2}, Iterations: {}", self.zoom_factor, self.max_iterations);
+        // Create cache key
+        let cache_key = self.create_cache_key(&params);
+
+        // Check cache first
+        if let Some(cached_data) = self.fractal_cache.get(&cache_key) {
+            self.fractal_data = cached_data.clone();
+            let generation_time = start_time.elapsed();
+            self.status_message = format!("Cached fractal - Zoom: {:.2}, Iterations: {}, Time: {:.1}ms",
+                self.zoom_factor, self.max_iterations, generation_time.as_millis());
+        } else {
+            // Generate new fractal
+            self.fractal_data = self.fractal_generator.generate(&params);
+
+            // Cache the result (limit cache size)
+            if self.fractal_cache.len() < 50 {
+                self.fractal_cache.insert(cache_key, self.fractal_data.clone());
+            } else if self.fractal_cache.len() >= 100 {
+                // Clear old cache entries when it gets too large
+                self.fractal_cache.clear();
+            }
+
+            let generation_time = start_time.elapsed();
+            self.status_message = format!("Generated fractal - Zoom: {:.2}, Iterations: {}, Time: {:.1}ms",
+                self.zoom_factor, self.max_iterations, generation_time.as_millis());
+        }
+
+        // Update FPS counter
+        self.update_fps();
     }
 
     fn zoom_in(&mut self) {
@@ -255,18 +331,107 @@ impl App {
     }
 
     fn auto_update_parameters(&mut self) {
-        // Simple auto-generation: slowly zoom in and pan around
         let mut rng = rand::thread_rng();
-        self.zoom_factor *= 1.1;
-        self.center_x += (rng.gen::<f64>() - 0.5) * 0.01 / self.zoom_factor;
-        self.center_y += (rng.gen::<f64>() - 0.5) * 0.01 / self.zoom_factor;
 
-        // Reset if zoomed too far
-        if self.zoom_factor > 1000.0 {
-            self.zoom_factor = 1.0;
-            self.center_x = -0.5;
-            self.center_y = 0.0;
+        match self.auto_generation_phase {
+            // Phase 0: Explore the main bulb
+            0..=200 => {
+                self.auto_target_x = -0.5 + (rng.gen::<f64>() - 0.5) * 0.3;
+                self.auto_target_y = (rng.gen::<f64>() - 0.5) * 0.3;
+                self.auto_target_zoom = 1.0 + (self.auto_generation_phase as f64 / 50.0);
+            },
+            // Phase 1: Zoom into interesting areas
+            201..=400 => {
+                if self.auto_generation_phase == 201 {
+                    // Pick an interesting point
+                    let interesting_points = [
+                        (-0.7269, 0.1889),   // Spiral
+                        (-0.8, 0.156),       // Seahorse valley
+                        (-0.74529, 0.11307), // Lightning
+                        (-0.1, 0.651),       // Rabbit ears
+                        (-0.75, 0.0),        // Needle point
+                    ];
+                    let point = interesting_points[rng.gen_range(0..interesting_points.len())];
+                    self.auto_target_x = point.0;
+                    self.auto_target_y = point.1;
+                }
+                self.auto_target_zoom = 5.0 + ((self.auto_generation_phase - 200) as f64 / 20.0);
+            },
+            // Phase 2: Deep zoom
+            401..=600 => {
+                self.auto_target_zoom = 15.0 + ((self.auto_generation_phase - 400) as f64 / 10.0);
+                // Small random movements
+                self.auto_target_x += (rng.gen::<f64>() - 0.5) * 0.001;
+                self.auto_target_y += (rng.gen::<f64>() - 0.5) * 0.001;
+            },
+            // Phase 3: Switch fractal type and reset
+            _ => {
+                self.auto_generation_phase = 0;
+                self.auto_target_x = -0.5;
+                self.auto_target_y = 0.0;
+                self.auto_target_zoom = 1.0;
+                self.max_iterations = 100;
+
+                // Cycle through different fractal types
+                self.current_fractal_type = match &self.current_fractal_type {
+                    FractalType::Mandelbrot => {
+                        self.current_equation = "Burning Ship".to_string();
+                        FractalType::BurningShip
+                    },
+                    FractalType::BurningShip => {
+                        self.current_equation = "Julia Set".to_string();
+                        FractalType::Julia { c: Complex::new(-0.7269, 0.1889) }
+                    },
+                    FractalType::Julia { .. } => {
+                        self.current_equation = "Tricorn".to_string();
+                        FractalType::Tricorn
+                    },
+                    FractalType::Tricorn => {
+                        self.current_equation = "Multibrot z^3".to_string();
+                        FractalType::Multibrot { power: 3.0 }
+                    },
+                    FractalType::Multibrot { .. } => {
+                        self.current_equation = "z^2 + c".to_string();
+                        FractalType::Mandelbrot
+                    },
+                    _ => {
+                        self.current_equation = "z^2 + c".to_string();
+                        FractalType::Mandelbrot
+                    }
+                };
+                return;
+            }
         }
+
+        // Smooth interpolation towards targets
+        let lerp_factor = 0.05;
+        self.center_x += (self.auto_target_x - self.center_x) * lerp_factor;
+        self.center_y += (self.auto_target_y - self.center_y) * lerp_factor;
+        self.zoom_factor += (self.auto_target_zoom - self.zoom_factor) * lerp_factor;
+
+        // Gradually increase iterations for better detail at high zoom
+        if self.zoom_factor > 10.0 {
+            self.max_iterations = (100 + (self.zoom_factor * 2.0) as u32).min(500);
+        }
+
+        self.auto_generation_phase += 1;
+
+        let fractal_name = match &self.current_fractal_type {
+            FractalType::Mandelbrot => "Mandelbrot",
+            FractalType::BurningShip => "Burning Ship",
+            FractalType::Julia { .. } => "Julia Set",
+            FractalType::Tricorn => "Tricorn",
+            FractalType::Multibrot { .. } => "Multibrot",
+            _ => "Custom"
+        };
+
+        self.status_message = format!(
+            "Auto-exploring {} - Phase {} - Zoom: {:.1}x, Iterations: {}",
+            fractal_name,
+            self.auto_generation_phase / 200,
+            self.zoom_factor,
+            self.max_iterations
+        );
     }
 
     fn ui(&mut self, f: &mut Frame) {
@@ -338,16 +503,29 @@ impl App {
             InputMode::Editing => " [EDITING]",
         };
 
-        let controls_text = format!(
-            "Mode: {}{}\n\nParameters:\nZoom: {:.2}x\nCenter: ({:.3}, {:.3})\nIterations: {}\n\nEquation: {}\n\nControls:\n+/= : Zoom In\n-   : Zoom Out\n↑↓←→: Pan\ni   : More Iterations\nd   : Fewer Iterations\nr/Space: Regenerate\nc   : Reset Center\n1   : Interactive Mode\n2   : Auto Mode\n3   : Edit Equation\nh/F1: Toggle Help\nq/Esc: Quit",
-            mode_str,
-            input_indicator,
-            self.zoom_factor,
-            self.center_x,
-            self.center_y,
-            self.max_iterations,
-            self.current_equation
-        );
+        let controls_text = if self.mode == AppMode::EquationEditor {
+            format!(
+                "Mode: {}{}\n\nEquation Editor:\nCurrent: {}\n\nExamples:\n• z^2 + c (Mandelbrot)\n• z^3 + c (Multibrot)\n• burning ship\n• tricorn\n• julia(-0.7, 0.27)\n\nControls:\nType equation\nEnter: Apply\nEsc: Cancel\n\nParameters:\nZoom: {:.2}x\nCenter: ({:.3}, {:.3})\nIterations: {}",
+                mode_str,
+                input_indicator,
+                self.current_equation,
+                self.zoom_factor,
+                self.center_x,
+                self.center_y,
+                self.max_iterations
+            )
+        } else {
+            format!(
+                "Mode: {}{}\n\nParameters:\nZoom: {:.2}x\nCenter: ({:.3}, {:.3})\nIterations: {}\n\nEquation: {}\n\nControls:\n+/= : Zoom In\n-   : Zoom Out\n↑↓←→: Pan\ni   : More Iterations\nd   : Fewer Iterations\nr/Space: Regenerate\nc   : Reset Center\n1   : Interactive Mode\n2   : Auto Mode\n3   : Edit Equation\nh/F1: Toggle Help\nq/Esc: Quit",
+                mode_str,
+                input_indicator,
+                self.zoom_factor,
+                self.center_x,
+                self.center_y,
+                self.max_iterations,
+                self.current_equation
+            )
+        };
 
         let controls_widget = Paragraph::new(controls_text)
             .block(Block::default().borders(Borders::ALL).title("Controls"));
@@ -380,19 +558,146 @@ impl App {
             Navigation:\n\
             Arrow Keys - Pan around\n\
             +/= - Zoom in\n\
-            - - Zoom out\n\n\
+            - - Zoom out\n\
+            c - Reset to center\n\n\
             Parameters:\n\
             i - Increase iterations\n\
             d - Decrease iterations\n\
-            r - Regenerate fractal\n\n\
+            r/Space - Regenerate fractal\n\n\
+            Quick Presets:\n\
+            F2 - Burning Ship\n\
+            F3 - Julia Set\n\
+            F4 - Tricorn\n\n\
+            Equation Editor:\n\
+            Examples: z^3+c, burning ship,\n\
+            tricorn, julia(-0.7, 0.27)\n\n\
             General:\n\
-            h - Toggle this help\n\
-            q - Quit application\n\n\
+            h/F1 - Toggle this help\n\
+            q/Esc - Quit application\n\n\
             Press 'h' to close this help.";
 
         let help_widget = Paragraph::new(help_text)
             .style(Style::default().fg(Color::White))
             .block(Block::default().borders(Borders::ALL).title("Help"));
         f.render_widget(help_widget, popup_area);
+    }
+
+    fn validate_and_apply_equation(&mut self) -> bool {
+        let equation = self.current_equation.trim().to_lowercase();
+
+        // Parse and validate common fractal equation patterns
+        if equation.is_empty() {
+            return false;
+        }
+
+        // Try to parse the equation and set the appropriate fractal type
+        if equation == "z^2+c" || equation == "z^2 + c" || equation == "mandelbrot" {
+            self.current_fractal_type = FractalType::Mandelbrot;
+            self.current_equation = "z^2 + c".to_string();
+            return true;
+        }
+
+        if equation == "burning ship" || equation == "burningship" {
+            self.current_fractal_type = FractalType::BurningShip;
+            self.current_equation = "Burning Ship".to_string();
+            return true;
+        }
+
+        if equation == "tricorn" {
+            self.current_fractal_type = FractalType::Tricorn;
+            self.current_equation = "Tricorn".to_string();
+            return true;
+        }
+
+        // Parse z^n + c patterns (simple parsing without regex for now)
+        if let Some(power) = self.parse_power_equation(&equation) {
+            if power >= 2.0 && power <= 10.0 {
+                self.current_fractal_type = FractalType::Multibrot { power };
+                self.current_equation = format!("z^{} + c", power);
+                return true;
+            }
+        }
+
+        // Parse Julia set patterns
+        if let Some((real, imag)) = self.parse_julia_equation(&equation) {
+            self.current_fractal_type = FractalType::Julia { c: Complex::new(real, imag) };
+            self.current_equation = format!("Julia: c = {} + {}i", real, imag);
+            return true;
+        }
+
+        false
+    }
+
+    fn parse_power_equation(&self, equation: &str) -> Option<f64> {
+        // Simple parsing for patterns like "z^3+c", "z^4 + c", etc.
+        if equation.starts_with("z^") && equation.ends_with("+c") {
+            let power_part = &equation[2..equation.len()-2].trim();
+            if let Ok(power) = power_part.parse::<f64>() {
+                return Some(power);
+            }
+        }
+        if equation.starts_with("z^") && equation.ends_with("+ c") {
+            let power_part = &equation[2..equation.len()-3].trim();
+            if let Ok(power) = power_part.parse::<f64>() {
+                return Some(power);
+            }
+        }
+        None
+    }
+
+    fn parse_julia_equation(&self, equation: &str) -> Option<(f64, f64)> {
+        // Simple parsing for patterns like "julia(-0.7, 0.27)"
+        if equation.starts_with("julia(") && equation.ends_with(")") {
+            let inner = &equation[6..equation.len()-1];
+            let parts: Vec<&str> = inner.split(',').collect();
+            if parts.len() == 2 {
+                if let (Ok(real), Ok(imag)) = (
+                    parts[0].trim().parse::<f64>(),
+                    parts[1].trim().parse::<f64>()
+                ) {
+                    return Some((real, imag));
+                }
+            }
+        }
+        None
+    }
+
+    fn create_cache_key(&self, params: &FractalParams) -> String {
+        format!(
+            "{:?}_{}_{}_{:.6}_{:.6}_{:.3}_{}",
+            params.fractal_type,
+            params.width,
+            params.height,
+            params.center_x,
+            params.center_y,
+            params.zoom,
+            params.max_iterations
+        )
+    }
+
+    fn update_fps(&mut self) {
+        self.frame_count += 1;
+        let elapsed = self.last_render_time.elapsed();
+
+        if elapsed >= Duration::from_secs(1) {
+            self.fps = self.frame_count as f64 / elapsed.as_secs_f64();
+            self.frame_count = 0;
+            self.last_render_time = Instant::now();
+        }
+    }
+
+    fn optimize_parameters_for_performance(&mut self) {
+        // Adaptive quality based on zoom level and performance
+        if self.fps < 10.0 && self.fps > 0.0 {
+            // Performance is poor, reduce quality
+            if self.max_iterations > 50 {
+                self.max_iterations = (self.max_iterations * 9 / 10).max(50);
+            }
+        } else if self.fps > 30.0 {
+            // Performance is good, can increase quality
+            if self.max_iterations < 200 && self.zoom_factor > 5.0 {
+                self.max_iterations = (self.max_iterations * 11 / 10).min(200);
+            }
+        }
     }
 }
